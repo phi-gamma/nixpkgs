@@ -19774,6 +19774,8 @@ with pkgs;
 
   vokoscreen = libsForQt5.callPackage ../applications/video/vokoscreen { };
 
+  vtcol = callPackage ../os-specific/linux/vtcol { };
+
   wavegain = callPackage ../applications/audio/wavegain { };
 
   wcalc = callPackage ../applications/misc/wcalc { };
