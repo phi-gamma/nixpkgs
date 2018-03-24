@@ -1,0 +1,86 @@
+From b01eb2ab5066c441fd163bef3fd491a422385279 Mon Sep 17 00:00:00 2001
+From: Philipp Gesang <phg@phi-gamma.net>
+Date: Tue, 13 Feb 2018 17:50:34 +0100
+Subject: [PATCH] add format for server message numbers (pop, imap)
+
+Add the %U specifier to access the UID or message-number, respectively,
+in the index format. The value is read directly from the refno attribute
+of a header which needs extending to 64 bit to fit both numbers.
+
+If IMAP or POP3 support is unavailable, the value printed by %U is zero.
+
+Signed-off-by: Philipp Gesang <phg@phi-gamma.net>
+---
+ hdrline.c      | 12 ++++++++++++
+ imap/message.c |  2 ++
+ mutt.h         |  4 ++--
+ 3 files changed, 16 insertions(+), 2 deletions(-)
+
+diff --git a/hdrline.c b/hdrline.c
+index c83714f9..b8c00666 100644
+--- a/hdrline.c
++++ b/hdrline.c
+@@ -239,6 +239,7 @@ static char *apply_subject_mods (ENVELOPE *env)
+  * %R = comma separated list of Cc: recipients
+  * %s = subject
+  * %S = short message status (e.g., N/O/D/!/r/-)
++ * %U = IMAP UID / POP3 index number of message in mailbox
+  * %t = `to:' field (recipients)
+  * %T = $to_chars
+  * %u = user (login) name of author
+@@ -567,6 +568,17 @@ hdr_format_str (char *dest,
+       strfcpy(dest, NONULL(hfi->pager_progress), destlen);
+       break;
+ 
++    case 'U':
++      snprintf (fmt, sizeof (fmt), "%%%slld", prefix);
++      snprintf (dest, destlen, fmt,
++#if defined USE_POP || defined USE_IMAP
++                hdr->refno
++#else
++                0
++#endif
++                );
++      break;
++
+     case 'r':
+       buf2[0] = 0;
+       rfc822_write_address(buf2, sizeof(buf2), hdr->env->to, 1);
+diff --git a/imap/message.c b/imap/message.c
+index 95b8366a..cc8dfee5 100644
+--- a/imap/message.c
++++ b/imap/message.c
+@@ -480,6 +480,7 @@ static int read_headers_normal_eval_cache (IMAP_DATA *idata,
+         }
+ 
+         /*  ctx->hdrs[msgno]->received is restored from mutt_hcache_restore */
++        ctx->hdrs[idx]->refno = h.data->uid;
+         ctx->hdrs[idx]->data = (void *) (h.data);
+ 
+         ctx->msgcount++;
+@@ -809,6 +810,7 @@ static int read_headers_fetch_new (IMAP_DATA *idata, unsigned int msn_begin,
+         ctx->hdrs[idx]->flagged = h.data->flagged;
+         ctx->hdrs[idx]->replied = h.data->replied;
+         ctx->hdrs[idx]->received = h.received;
++        ctx->hdrs[idx]->refno = h.data->uid;
+         ctx->hdrs[idx]->data = (void *) (h.data);
+ 
+         if (*maxuid < h.data->uid)
+diff --git a/mutt.h b/mutt.h
+index 004f4b48..8ea39609 100644
+--- a/mutt.h
++++ b/mutt.h
+@@ -859,8 +859,8 @@ typedef struct header
+   LIST *chain;
+ #endif
+ 
+-#ifdef USE_POP
+-  int refno;			/* message number on server */
++#if defined USE_POP || defined USE_IMAP
++  long long refno;		/* message number on server */
+ #endif
+ 
+ #if defined USE_POP || defined USE_IMAP
+-- 
+2.17.2
+
