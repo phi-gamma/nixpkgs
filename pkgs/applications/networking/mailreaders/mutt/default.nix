@@ -5,6 +5,7 @@
 , gnupg ? null
 , gpgme ? null
 , kerberos ? null
+, libidn2 ? null
 , headerCache  ? true
 , sslSupport   ? true
 , saslSupport  ? true
@@ -14,6 +15,7 @@
 , imapSupport  ? true
 , withSidebar  ? true
 , gssSupport   ? true
+, idnaSupport   ? true
 }:
 
 assert headerCache  -> gdbm       != null;
@@ -44,6 +46,7 @@ stdenv.mkDerivation rec {
     ++ optional headerCache  gdbm
     ++ optional sslSupport   openssl
     ++ optional gssSupport   kerberos
+    ++ optional idnaSupport  libidn2
     ++ optional saslSupport  cyrus_sasl
     ++ optional gpgmeSupport gpgme;
 
@@ -68,7 +71,8 @@ stdenv.mkDerivation rec {
     "--with-homespool=mailbox"
   ] ++ optional sslSupport  "--with-ssl"
     ++ optional gssSupport  "--with-gss"
-    ++ optional saslSupport "--with-sasl";
+    ++ optional saslSupport "--with-sasl"
+    ++ optional idnaSupport  "--with-idn2";
 
   postPatch = optionalString (smimeSupport || gpgmeSupport) ''
     sed -i 's#/usr/bin/openssl#${openssl}/bin/openssl#' smime_keys.pl
