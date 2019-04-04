@@ -17321,6 +17321,20 @@ in
     desktopName = "Firefox DevEdition";
   };
 
+  firefox-phg-unwrapped = callPackage ../applications/networking/browsers/ffesr {
+    channel = "release";
+    generated = import ../applications/networking/browsers/ffesr/sources.nix;
+    gconf = pkgs.gnome2.GConf;
+    inherit (pkgs.gnome2) libgnome libgnomeui;
+  };
+
+  firefox-phg = wrapFirefox firefox-phg-unwrapped {
+    browserName = "firefox";
+    name = "firefox-bin-" +
+      (builtins.parseDrvName firefox-phg-unwrapped.name).version;
+    desktopName = "Firefox";
+  };
+
   firestr = libsForQt5.callPackage ../applications/networking/p2p/firestr
     { boost = boost155;
     };
