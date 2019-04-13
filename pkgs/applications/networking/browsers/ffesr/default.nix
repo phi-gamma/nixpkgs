@@ -2,7 +2,6 @@
 , lib
 , fetchurl
 , config
-, alsaLib
 , atk
 , cairo
 , curl
@@ -11,13 +10,11 @@
 , dbus
 , fontconfig
 , freetype
-#, gconf
 , gdk_pixbuf
 , glib
 , glibc
-#, gtk2
-, gtk3
-, kerberos
+, gtk2
+, xorg
 , libX11
 , libXScrnSaver
 , libxcb
@@ -30,131 +27,136 @@
 , libXinerama
 , libXrender
 , libXt
-#, libcanberra-gtk2
-#, libgnome
-#, libgnomeui
 , libnotify
-, gnome3
 , libGLU_combined
 , nspr
 , nss
 , pango
-, libheimdal
 , libpulseaudio
 , systemd
-#, channel
-#, generated
 , writeScript
 , writeText
 , xidel
 , coreutils
+, autoconf213
 , gnused
 , gnugrep
 , gnupg
 , ffmpeg
+, which
+, pkgconfig
 , runtimeShell
+, python2
+, perl
+, yasm
+, zip
+, unzip
 , systemLocale ? config.i18n.defaultLocale or "en-US"
 }:
 
-#let
-  #policies = {
-    #DisableAppUpdate = true;
-  #};
+assert stdenv.cc.libc or null != null;
 
-  #policiesJson =
-    #writeText "no-update-firefox-policy.json" (builtins.toJSON { inherit policies; });
-#in
+let
+  libs = [
+    gtk2
+    perl
+    zip
+    unzip
+    #libjpeg
+    #zlib
+    #bzip2
+    dbus dbus-glib pango freetype fontconfig
+    xorg.libXi xorg.libXcursor
+    xorg.libX11 xorg.libXrender xorg.libXft xorg.libXt
+    #file
+    nspr libnotify xorg.pixman
+    yasm
+    libGLU_combined
+    xorg.libXScrnSaver 
+    xorg.libXdamage
+    xorg.libXext
+    #sqlite
+    #makeWrapper
+    #libevent
+    #libvpx
+    #cairo
+    #icu
+    #libpng
+    #jemalloc
+    glib
+    libpulseaudio
+  ];
+
+  nlibs = [
+    autoconf213 which gnused pkgconfig
+    #perl
+    python2
+  ];
+in
 
 stdenv.mkDerivation rec {
+  version = "52.9.0esr";
   name = "firefox-phg-${version}";
-  version = "52.0.9";
+  src = fetchurl {
+    url = "http://ftp.mozilla.org/pub/firefox/releases/${version}/source/firefox-${version}.source.tar.xz";
+    sha512 = "bfca42668ca78a12a9fb56368f4aae5334b1f7a71966fbba4c32b9c5e6597aac79a6e340ac3966779d2d5563eb47c054ab33cc40bfb7306172138ccbd3adb2b9";
+  };
 
   dontStrip = true;
   dontPatchELF = true;
 
-  src = fetchurl {
-    url = "http://archive.mozilla.org/pub/firefox/releases/52.0esr/linux-x86_64/en-US/firefox-52.0esr.tar.bz2";
-    sha512 = "0rsvkmqjgv81iljqw7qbml2wf47h4v33i6knalc227dbs993ck2jg11a5kk007hmcqlnfi4ij39mzvpqwfa0v6mwc42r3ja0k69w5z7";
-  };
+  buildInputs = libs;
+  nativeBuildInputs = nlibs;
 
-  #inherit gtk3;
+  configureFlags = [
+    "--enable-pulseaudio"
+    "--disable-skia"
+    "--disable-system-cairo"
+    "--enable-application=browser"
+    "--disable-system-ffi"
+    "--disable-system-pixman"
+    "--disable-system-sqlite"
+    "--disable-startup-notification"
+    "--disable-tests"
+    "--disable-necko-wifi"
+    "--disable-updater"
+    "--enable-jemalloc"
+    "--disable-maintenance-service"
+    "--disable-gconf"
+    "--enable-default-toolkit=cairo-gtk2"
+   #"--enable-optimize"
+    "--enable-strip"
+  ];
 
-  unpackCmd = ''
-    tar xjf "$src"
+  enableParallelBuilding = true;
+  doCheck = false; # "--disable-tests" above
+
+  preConfigure = ''
+    rm -f configure
+    rm -f js/src/configure
+    rm -f .mozconfig*
+    make -f client.mk configure-files
+    configureScript="$(realpath ./configure)"
+    cd obj-*
   '';
 
-  patchPhase = ''
-    echo 'pref("app.update.auto", "false");' >> defaults/pref/channel-prefs.js
+  postInstall = lib.optionalString stdenv.isLinux ''
+    # Remove SDK cruft. FIXME: move to a separate output?
+    rm -rf $out/share/idl $out/include $out/lib/firefox-devel-*
   '';
 
-  buildPhase = ":";   # nothing to build
-
-  installPhase = let
-    libPath = lib.makeLibraryPath [
-      stdenv.cc.cc
-      alsaLib
-      (lib.getDev alsaLib)
-      atk
-      cairo
-      curl
-      cups
-      dbus-glib
-      dbus
-      fontconfig
-      freetype
-      gdk_pixbuf
-      glib
-      glibc
-      gtk3
-      kerberos
-      libX11
-      libXScrnSaver
-      libXcomposite
-      libXcursor
-      libxcb
-      libXdamage
-      libXext
-      libXfixes
-      libXi
-      libXinerama
-      libXrender
-      libXt
-      libnotify
-      libGLU_combined
-      nspr
-      nss
-      pango
-      libheimdal
-      libpulseaudio
-      (lib.getDev libpulseaudio)
-      systemd
-      ffmpeg
-    ];
-  in ''
-    rm -f -- ./run-mozilla.sh
-
-    mkdir -p $prefix/lib/firefox
-    cp -R * $prefix/lib/firefox
-
-    mkdir -p "$out/bin"
-    ln -s $prefix/lib/firefox/firefox $out/bin/
-
-    for executable in \
-      firefox firefox-bin plugin-container \
-      updater crashreporter webapprt-stub
-    do
-      if [ -e "$out/lib/firefox/$executable" ]; then
-        patchelf \
-          --interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" \
-          "$out/lib/firefox/$executable"
-      fi
-    done
-
-    find $out/lib/firefox/ -executable -type f -exec \
-      patchelf --set-rpath "${libPath}" \
-        {} \;
+  postFixup = lib.optionalString stdenv.isLinux ''
+    # Fix notifications. LibXUL uses dlopen for this, unfortunately; see #18712.
+    patchelf --set-rpath "${lib.getLib libnotify
+      }/lib:$(patchelf --print-rpath "$out"/lib/firefox*/libxul.so)" \
+        "$out"/lib/firefox*/libxul.so
   '';
 
+  doInstallCheck = true;
+  installCheckPhase = ''
+    # Some basic testing
+    "$out/bin/firefox" --version
+  '';
 
   meta = with stdenv.lib; {
     homepage = https://mozilla.org;
@@ -167,4 +169,3 @@ stdenv.mkDerivation rec {
     maintainers = [ phg ];
   };
 }
-
