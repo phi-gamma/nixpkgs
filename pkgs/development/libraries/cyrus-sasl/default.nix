@@ -27,6 +27,7 @@ stdenv.mkDerivation rec {
   patches = [
     ./missing-size_t.patch # https://bugzilla.redhat.com/show_bug.cgi?id=906519
     ./cyrus-sasl-ac-try-run-fix.patch
+    ./0001-Prevent-double-free-of-RC4-context.patch # https://github.com/cyrusimap/cyrus-sasl/pull/562/commits
   ];
 
   configureFlags = [
